@@ -1,8 +1,4 @@
--- Created by Vertabelo (http://vertabelo.com)
--- Last modification date: 2021-04-05 12:56:53.13
 
--- tables
--- Table: Order
 CREATE TABLE "Order" (
                          IdOrder int  NOT NULL IDENTITY,
                          IdProduct int  NOT NULL,
@@ -71,12 +67,59 @@ VALUES('Warsaw', 'Kwiatowa 12');
 
 GO
 
-INSERT INTO Product(Name, Description, Price)
-VALUES ('Abacavir', '', 25.5),
-('Acyclovir', '', 45.0),
-('Allopurinol', '', 30.8);
+CREATE PROCEDURE AddProductToWarehousea
+    @IdProduct INT, 
+    @IdWarehouse INT, 
+    @Amount INT,  
+    @CreatedAt DATETIME
+AS
+BEGIN
+    DECLARE @IdProductFromDb INT, @IdOrder INT, @Price DECIMAL(5,2);
 
-GO
+SELECT TOP 1 @IdOrder = o.IdOrder  FROM "Order" o
+                                            LEFT JOIN Product_Warehouse pw ON o.IdOrder=pw.IdOrder
+WHERE o.IdProduct=@IdProduct AND o.Amount=@Amount AND pw.IdProductWarehouse IS NULL AND
+    o.CreatedAt<@CreatedAt;
 
-INSERT INTO "Order"(IdProduct, Amount, CreatedAt)
-VALUES((SELECT IdProduct FROM Product WHERE Name='Abacavir'), 125, GETDATE());
+SELECT @IdProductFromDb=Product.IdProduct, @Price=Product.Price FROM Product WHERE IdProduct=@IdProduct;
+
+IF @IdProductFromDb IS NULL
+BEGIN  
+        RAISERROR('Invalid parameter: Provided IdProduct does not exist', 18, 0);  
+        RETURN;
+END;  
+  
+    IF @IdOrder IS NULL
+BEGIN  
+        RAISERROR('Invalid parameter: There is no order to fulfill', 18, 0);  
+        RETURN;
+END;  
+   
+    IF NOT EXISTS(SELECT 1 FROM Warehouse WHERE IdWarehouse=@IdWarehouse)
+BEGIN  
+        RAISERROR('Invalid parameter: Provided IdWarehouse does not exist', 18, 0);  
+        RETURN;
+END;  
+  
+    SET XACT_ABORT ON;
+BEGIN TRAN;
+
+UPDATE "Order" SET
+    FulfilledAt=@CreatedAt
+WHERE IdOrder=@IdOrder;
+
+INSERT INTO Product_Warehouse(IdWarehouse, IdProduct, IdOrder, Amount, Price, CreatedAt)
+VALUES(@IdWarehouse, @IdProduct, @IdOrder, @Amount, @Amount*@Price, @CreatedAt);
+
+SELECT @@IDENTITY AS NewId;
+
+COMMIT;
+END
+
+SELECT * FROM  Product_Warehouse
+SELECT * FROM  Product
+SELECT * FROM "Order"
+
+SELECT * FROM Warehouse
+    INSERT INTO "Order" (IdProduct, Amount, CreatedAt)
+VALUES (1, 2, '2024-05-05 12:00:00');
